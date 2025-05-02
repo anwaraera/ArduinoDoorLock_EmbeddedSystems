@@ -1,7 +1,6 @@
 #include <Adafruit_SSD1306.h>
 #include <splash.h>
 #include <Wire.h>
-#include <Time.h>
 #include <Keypad.h>
 #include <Servo.h>
 
@@ -18,10 +17,13 @@ SOURCES:
  -  https://playground.arduino.cc/Main/I2cScanner/ (I2C Scanner)
 */
 
+// Display initialization
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+// Servo Motor initialization
 Servo servoMotor;
 
+// 4x4 Keypad initialization
 const byte ROWS = 4;
 const byte COLS = 4;
 char keys[ROWS][COLS] = {
@@ -34,6 +36,7 @@ byte rowPins[ROWS] = { 10, 9, 8, 7 };
 byte colPins[COLS] = { 6, 5, 4, 3 };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
+// All global variables used throughout
 String correctPin = "1234";
 String enteredPin = "";
 bool isLocked = true;
@@ -46,10 +49,15 @@ String locked = "";
 String timestamp = "";
 
 void setup() {
-  servoMotor.attach(2);
-  servoMotor.write(LOCKED);
+  // Begin Serials for communication between ESP and Mega
   Serial.begin(9600);
   Serial1.begin(9600);
+
+  // Servo starts off in locked position
+  servoMotor.attach(2);
+  servoMotor.write(LOCKED);
+
+  // Oled display set up
   displayStatus();
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0X3C)) {
     Serial.println(F("SSD1306 allocation failed"));
@@ -64,11 +72,11 @@ void setup() {
 }
 
 void loop() {
-  char key = keypad.getKey();
+  char key = keypad.getKey();  // Waits for key to be pushed and stores
 
   if (key) {
 
-    if (key == 'A' && !isLocked) {
+    if (key == 'A' && !isLocked) {  // Pressing 'A' only works when door is unlocked, and locks the door
       lock();
       display.clearDisplay();
       display.setCursor(20, 20);
@@ -83,31 +91,35 @@ void loop() {
         } else {
           locked = "UNLOCKED";
         }
+     
+      // Send data to Serial1 which is connected to ESP module
       postData = "attempt_pin=A&attempt_status=" + locked;
       Serial1.println(postData);
     }
-
     else if (isLocked) {
-      if (key == '#') {
+      if (key == '#') {   // When door is locked, '#' is the 'enter' button after putting in a PIN 
         checkPin();
         if (isLocked) {
           locked = "LOCKED";
         } else {
           locked = "UNLOCKED";
         }
+       
+        // Send data to Serial1 which is connected to ESP module
         postData = "attempt_pin=" + enteredPin + "&attempt_status=" + locked;
         Serial1.println(postData);
 
+        // Clear PIN and display when done
         clearPin();
         display.clearDisplay();
         display.display();
-      } else if (key == '*') {
+      } else if (key == '*') {   // '*' clears the current PIN entered, allowing users to start again if there was a mistake
         clearPin();
         display.clearDisplay();
         cursor_x = 10;
         display.setCursor(cursor_x, cursor_y);
         display.display();
-      } else if (key != 'A') {
+      } else if (key != 'A') {   // All other keys are saved into 'enteredPin' and displayed as entered
         enteredPin += key;
         Serial.print(key);
         display.setCursor(cursor_x, cursor_y);
@@ -119,7 +131,8 @@ void loop() {
   }
 }
 
-void checkPin() {
+// Checks if the user entered PIN and the stored PIN match and locks/unlocks door accordingly
+void checkPin() { 
   Serial.println();
 
   if (enteredPin == correctPin) {
@@ -145,6 +158,7 @@ void checkPin() {
   displayStatus();
 }
 
+// Clears the entered PIN
 void clearPin() {
   enteredPin = "";
   if (isLocked) {
@@ -152,18 +166,21 @@ void clearPin() {
   }
 }
 
+// Unlocks the door - turns the servo motor
 void unlock() {
   Serial.println("Correct PIN - Unlocking");
   servoMotor.write(UNLOCKED);
   isLocked = false;
 }
 
+// Locks the door - turns the servo motor
 void lock() {
   Serial.println("Locking system");
   servoMotor.write(LOCKED);
   isLocked = true;
 }
 
+// Outputs into the Serial Monitor for debugging purposes
 void displayStatus() {
   Serial.println();
   Serial.print("Current Status: ");
